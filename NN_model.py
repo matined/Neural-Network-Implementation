@@ -3,7 +3,7 @@ from activation_functions import *
 
 
 class NN_model:
-    def __init__(self, layers_sizes=(10, 1), learning_rate=0.075, max_iter=2000, activation='relu', verbose=True) -> None:
+    def __init__(self, layers_sizes=(), learning_rate=0.075, max_iter=2000, activation='relu', verbose=True) -> None:
         self.layer_sizes = layers_sizes
         self.learning_rate = learning_rate
         self.max_iter = max_iter
@@ -12,7 +12,6 @@ class NN_model:
 
         self.data = {}
         self.parameters = {}
-        self.number_of_layers = len(layers_sizes)
 
     def process_data(self, X: np.ndarray, y: np.ndarray) -> dict:
         """
@@ -104,8 +103,8 @@ class NN_model:
         """
         Z = W @ A_prev + b
 
-        if activation == 'tanh':
-            A = np.tanh(Z)
+        if activation == 'relu':
+            A = relu(Z)
 
         cache = {
             'A_prev': A_prev,
@@ -116,7 +115,7 @@ class NN_model:
 
         return A, cache
 
-    def forward_propagation(self, X: np.ndarray, parameters: dict, number_of_layers: int, activation_function: str) -> tuple:
+    def forward_propagation(self, X: np.ndarray, parameters: dict, activation_function: str) -> tuple:
         """
         Performs a forward propagation.
 
@@ -127,9 +126,6 @@ class NN_model:
 
         parameters : dictionary
             Weights and biases W1...WL, b1...bL
-
-        number_of_layers : int
-            A number of layers
 
         activation : str
             A choice of a activation function for hidden layers (sigmoid, tanh, ReLU, leaky ReLU)
@@ -144,13 +140,14 @@ class NN_model:
         """
         caches = []
         A = X
+        L = len(parameters) // 2
 
-        for l in range(1, number_of_layers):
+        for l in range(1, L):
             A, cache = self.forward_propagation_step(A, parameters['W' + str(l)], parameters['b' + str(l)], activation_function)
             caches.append(cache)
 
-        AL, cache = self.forward_propagation_step(A, parameters['W' + str(number_of_layers)],
-                                                  parameters['b' + str(number_of_layers)], activation_function)
+        AL, cache = self.forward_propagation_step(A, parameters['W' + str(L)], parameters['b' + str(L)], activation_function)
+        caches.append(cache)
 
         return AL, caches
 
@@ -214,7 +211,7 @@ class NN_model:
 
         return dA_prev, dW, db
 
-    def backpropagation(self, AL: np.ndarray, y: np.ndarray, caches: list, number_of_layers: int) -> dict:
+    def backpropagation(self, AL: np.ndarray, y: np.ndarray, caches: list) -> dict:
         """
         Perfoms a full backpropagation.
 
@@ -229,9 +226,6 @@ class NN_model:
         caches : dictionary
             List of caches from the forward propagation
 
-        number_of_layers : int
-            A number of layers
-
         Returns
         -------
         grads : dictionary
@@ -240,16 +234,17 @@ class NN_model:
         grads = {}
         m = AL.shape[1]
         y = y.reshape(AL.shape)
+        L = len(caches)
 
         dAL = -(y / AL - (1 - y) / (1 - AL))
 
-        current_cache = caches[number_of_layers-1]
+        current_cache = caches[L-1]
         dA_prev_temp, dW_temp, db_temp = self.backpropagation_step(dAL, current_cache, 'sigmoid')
-        grads["dA" + str(number_of_layers-1)] = dA_prev_temp
-        grads["dW" + str(number_of_layers)] = dW_temp
-        grads["db" + str(number_of_layers)] = db_temp
+        grads["dA" + str(L-1)] = dA_prev_temp
+        grads["dW" + str(L)] = dW_temp
+        grads["db" + str(L)] = db_temp
 
-        for l in reversed(range(number_of_layers-1)):
+        for l in reversed(range(L-1)):
             current_cache = caches[l]
             dA_prev_temp, dW_temp, db_temp = self.backpropagation_step(dA_prev_temp, current_cache, 'relu')
             grads["dA" + str(l)] = dA_prev_temp
@@ -258,34 +253,23 @@ class NN_model:
 
         return grads
 
-    def update_parameters(self, params: dict, grads: dict, learning_rate: float = 0.0075) -> dict:
+    def update_parameters(self, grads: dict, learning_rate: float = 0.0075) -> dict:
         """
         Update parameters using gradient descent.
 
         Parameters
         ----------
-        params : dictionary
-            Parameters W1...WL, b1...bL
-
         grads : dictionary
             Output of the BP, gradients dA1...dAL, dW1...dWL, db1...dbL
 
         learning_rate : float
-            A learning rate.
-
-        Returns
-        -------
-        parameters : dictionary
-            Updated parameters.
+            A learning rate
         """
-        parameters = params.copy()
-        L = len(parameters) // 2
+        L = len(self.parameters) // 2
 
         for l in range(L):
-            parameters["W" + str(l+1)] = parameters["W" + str(l+1)] - learning_rate * grads['dW' + str(l+1)]
-            parameters["b" + str(l+1)] = parameters["b" + str(l+1)] - learning_rate * grads['db' + str(l+1)]
-
-        return parameters
+            self.parameters["W" + str(l+1)] = self.parameters["W" + str(l+1)] - learning_rate * grads['dW' + str(l+1)]
+            self.parameters["b" + str(l+1)] = self.parameters["b" + str(l+1)] - learning_rate * grads['db' + str(l+1)]
 
     def fit(self, X: np.ndarray, y: np.ndarray) -> None:
         """
@@ -303,13 +287,13 @@ class NN_model:
         self.parameters = self.initialize_parameters(self.layer_sizes)
 
         for i in range(self.max_iter):
-            AL, caches = self.forward_propagation(X, self.parameters, self.number_of_layers, self.activation)
-            cost = self.compute_cost(AL, y)
-            grads = self.backpropagation(AL, y, caches, self.number_of_layers)
-            self.parameters = self.update_parameters(self.parameters, grads, self.learning_rate)
+            AL, caches = self.forward_propagation(self.data['X'], self.parameters, self.activation)
+            cost = self.compute_cost(AL, self.data['y'])
+            grads = self.backpropagation(AL, self.data['y'], caches)
+            self.update_parameters(grads, self.learning_rate)
 
             if self.verbose and i % 100 == 0:
-                print(f'Cost after interation {i}: {np.squeeze(cost)}')
+                print(f'Cost after interation {i}: {float(np.squeeze(cost))}')
 
     def predict(self, X: np.ndarray) -> np.ndarray:
         """
