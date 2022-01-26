@@ -5,7 +5,7 @@ I do this project for the better understanding of NN. I'm going to add new featu
 + numpy
 
 ## How to use?
-To use the model you have to create class `NN_model` object, then, you can use methods `fit()` and `predict()`.
+To use the model you have to create a class `NN_model` object, then, you can use methods `fit()` and `predict()`.
 ```python
 model = NN_model(layers_sizes=(3, 5, 3, 1), learning_rate=0.075, max_iter=200, activation='relu', verbose=True)
 model.fit(X_train, y_train)
